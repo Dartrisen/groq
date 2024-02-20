@@ -1,11 +1,19 @@
+# -*- coding: utf-8 -*-
+
+"""
+File: client.py
+Author: Dartrisen
+Description: ...
+"""
+
 import json
 import random
 import time
 
 import requests
 
-from constants import USER_AGENTS
-from models import Chat, Stats
+from .constants import USER_AGENTS
+from .models import Chat, Stats
 
 
 class StreamingChat:
@@ -20,14 +28,19 @@ class StreamingChat:
             self._url, headers=self._headers, json=self._json_data, stream=True
         )
 
+        # Check if the request was successful before creating the iterator
+        if not self._response or self._response.status_code != 200:
+            raise Exception(f"Request failed with status code {self._response.status_code}")
+
         def iterator():
-            for chunk in self._response.iter_lines(decode_unicode=True):
-                if chunk:
-                    try:
+            try:
+                for chunk in self._response.iter_lines(decode_unicode=True):
+                    if chunk:
                         loaded = json.loads(chunk)
-                        yield loaded["result"].get("content", "")
-                    except Exception as e:
-                        pass
+                        yield loaded.get("result", {}).get("content", "")
+            except Exception as e:
+                print(f"Error while decoding JSON: {e}")
+                raise
 
         return iterator()
 

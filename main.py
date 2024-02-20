@@ -1,4 +1,4 @@
-from client import Client
+from groq.client import Client
 
 
 groq_client = Client()
