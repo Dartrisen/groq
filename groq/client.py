@@ -3,95 +3,66 @@
 """
 File: client.py
 Author: Dartrisen
-Description: ...
+Description: client for the Groq API.
 """
 
 import json
-import random
-import time
+from time import time
+from typing import List
 
 import requests
 
-from .constants import USER_AGENTS
 from .models import Chat, Stats
+from .utils import get_random_user_agent, get_anon_token, create_headers
 
 
-class StreamingChat:
-    def __init__(self, url, headers, json_data):
-        self._url = url
-        self._headers = headers
-        self._json_data = json_data
-        self._response = None
-
-    def __enter__(self):
-        self._response = requests.post(
-            self._url, headers=self._headers, json=self._json_data, stream=True
-        )
-
-        # Check if the request was successful before creating the iterator
-        if not self._response or self._response.status_code != 200:
-            raise Exception(f"Request failed with status code {self._response.status_code}")
-
-        def iterator():
-            try:
-                for chunk in self._response.iter_lines(decode_unicode=True):
-                    if chunk:
-                        loaded = json.loads(chunk)
-                        yield loaded.get("result", {}).get("content", "")
-            except Exception as e:
-                print(f"Error while decoding JSON: {e}")
-                raise
-
-        return iterator()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._response:
-            self._response.close()
-
-
+# pylint: disable=too-few-public-methods, too-many-arguments
 class Client:
-    def __init__(self, proxies=None, user_agent=None, retries=0):
-        self._proxies = proxies
-        self._user_agent = (
-            random.choice(USER_AGENTS) if user_agent is None else user_agent
-        )
-        self._retries = retries
-        self._headers = {
-            "Host": "api.groq.com",
-            "Connection": "keep-alive",
-            "sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-            "sec-ch-ua-mobile": "?0",
-            "User-Agent": self._user_agent,
-            "Accept": "*/*",
-            "Origin": "https://groq.com",
-            "Sec-Fetch-Site": "same-site",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "Referer": "https://groq.com/",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-        self._auth_token = self._get_anon_token()
-        self._headers["authorization"] = "Bearer " + self._auth_token
+    """."""
+    BASE_URL = "https://api.groq.com/v1"
+    API_URL = f"{BASE_URL}/request_manager/text_completion"
 
-        self._auth_token_last_updated = int(time.time())
-        self._API_URL = "https://api.groq.com/v1/request_manager/text_completion"
+    def __init__(self, proxies: dict = None, user_agent: str = None, retries: int = 0) -> None:
+        self._proxies = proxies
+        self._user_agent = get_random_user_agent(user_agent)
+        self._retries = retries
+        self._headers = create_headers(self._user_agent)
+        self._auth_token = get_anon_token(self._headers)
+        self._headers["authorization"] = f"Bearer {self._auth_token}"
+        self._auth_token_last_updated = int(time())
 
     def create_chat(
-        self,
-        user_prompt,
-        model_id="mixtral-8x7b-32768",
-        system_prompt="Please try to provide useful, helpful and actionable answers.",
-        history=[],
-        seed=10,
-        max_tokens=32768,
-        temperature=0.2,
-        top_k=40,
-        top_p=0.8,
-        max_input_tokens=21845,
+            self,
+            user_prompt: str,
+            model_id: str = "mixtral-8x7b-32768",
+            system_prompt: str = "Please try to provide useful, helpful and actionable answers.",
+            history: List[Chat] = None,
+            seed: int = 10,
+            max_tokens: int = 32768,
+            temperature: float = 0.2,
+            top_k: int = 40,
+            top_p: float = 0.8,
+            max_input_tokens: int = 21845,
     ) -> Chat:
+        """.
+        :param user_prompt:
+        :param model_id:
+        :param system_prompt:
+        :param history:
+        :param seed:
+        :param max_tokens:
+        :param temperature:
+        :param top_k:
+        :param top_p:
+        :param max_input_tokens:
+        :return:
+        """
         if model_id == "llama2-70b-4096":
             max_tokens = min(4096, max_tokens)
             max_input_tokens = min(2730, max_input_tokens)
+
+        if history is None:
+            history = []
 
         json_data = {
             "model_id": model_id,
@@ -105,14 +76,13 @@ class Client:
             "top_p": top_p,
             "max_input_tokens": max_input_tokens,
         }
-
         response = requests.post(
-            self._API_URL,
+            self.API_URL,
             headers=self._headers,
             json=json_data,
-            stream=True,
+            proxies=self._proxies,
+            timeout=30,
         )
-
         res = ""
         request_id = None
         stats = Stats(
@@ -148,43 +118,3 @@ class Client:
             request_id=request_id,
             stats=stats,
         )
-
-    def create_streaming_chat(
-        self,
-        user_prompt,
-        model_id="mixtral-8x7b-32768",
-        system_prompt="Please try to provide useful, helpful and actionable answers.",
-        history=[],
-        seed=10,
-        max_tokens=32768,
-        temperature=0.2,
-        top_k=40,
-        top_p=0.8,
-        max_input_tokens=21845,
-    ):
-        if model_id == "llama2-70b-4096":
-            max_tokens = min(4096, max_tokens)
-            max_input_tokens = min(2730, max_input_tokens)
-
-        json_data = {
-            "model_id": model_id,
-            "system_prompt": system_prompt,
-            "user_prompt": user_prompt,
-            "history": history,
-            "seed": seed,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "top_k": top_k,
-            "top_p": top_p,
-            "max_input_tokens": max_input_tokens,
-        }
-
-        return StreamingChat(self._API_URL, self._headers, json_data)
-
-    def _get_anon_token(self):
-        response = requests.get(
-            "https://api.groq.com/v1/auth/anon_token",
-            headers=self._headers,
-            proxies=self._proxies,
-        )
-        return response.json()["access_token"]
