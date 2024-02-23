@@ -3,7 +3,7 @@
 """
 File: client.py
 Author: Dartrisen
-Description: client for the Groq API.
+Description: unofficial client for the Groq API.
 """
 
 import json
@@ -16,9 +16,43 @@ from .models import Chat, Stats
 from .utils import get_random_user_agent, get_anon_token, create_headers
 
 
+class StreamingChat:
+    def __init__(self, url, headers, json_data):
+        self._url = url
+        self._headers = headers
+        self._json_data = json_data
+        self._response = None
+
+    def __enter__(self):
+        self._response = requests.post(
+            self._url, headers=self._headers, json=self._json_data, stream=True
+        )
+
+        # Check if the request was successful before creating the iterator
+        if not self._response or self._response.status_code != 200:
+            raise Exception(f"Request failed with status code {self._response.status_code}")
+
+        def iterator():
+            try:
+                for chunk in self._response.iter_lines(decode_unicode=True):
+                    if chunk:
+                        loaded = json.loads(chunk)
+                        yield loaded.get("result", {}).get("content", "")
+            except Exception as e:
+                print(f"Error while decoding JSON: {e}")
+                raise
+
+        return iterator()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._response:
+            self._response.close()
+
+
 # pylint: disable=too-few-public-methods, too-many-arguments
 class Client:
-    """."""
+    """Client class."""
+
     BASE_URL = "https://api.groq.com/v1"
     API_URL = f"{BASE_URL}/request_manager/text_completion"
 
@@ -36,13 +70,13 @@ class Client:
             user_prompt: str,
             model_id: str = "mixtral-8x7b-32768",
             system_prompt: str = "Please try to provide useful, helpful and actionable answers.",
-            history: List[Chat] = None,
+            history: List[str] = None,
             seed: int = 10,
             max_tokens: int = 32768,
             temperature: float = 0.2,
             top_k: int = 40,
             top_p: float = 0.8,
-            max_input_tokens: int = 21845,
+            max_input_tokens: int = 21845
     ) -> Chat:
         """.
         :param user_prompt:
@@ -60,10 +94,8 @@ class Client:
         if model_id == "llama2-70b-4096":
             max_tokens = min(4096, max_tokens)
             max_input_tokens = min(2730, max_input_tokens)
-
         if history is None:
             history = []
-
         json_data = {
             "model_id": model_id,
             "system_prompt": system_prompt,
@@ -81,7 +113,7 @@ class Client:
             headers=self._headers,
             json=json_data,
             proxies=self._proxies,
-            timeout=30,
+            timeout=40,
         )
         res = ""
         request_id = None
@@ -118,3 +150,34 @@ class Client:
             request_id=request_id,
             stats=stats,
         )
+
+    def create_streaming_chat(
+            self,
+            user_prompt: str,
+            model_id: str = "mixtral-8x7b-32768",
+            system_prompt: str = "Please try to provide useful, helpful and actionable answers.",
+            history: List[str] = [],
+            seed: int = 10,
+            max_tokens: int = 32768,
+            temperature: float = 0.2,
+            top_k: int = 40,
+            top_p: float = 0.8,
+            max_input_tokens: int = 21845
+    ) -> StreamingChat:
+        if model_id == "llama2-70b-4096":
+            max_tokens = min(4096, max_tokens)
+            max_input_tokens = min(2730, max_input_tokens)
+
+        json_data = {
+            "model_id": model_id,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+            "history": history,
+            "seed": seed,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "top_k": top_k,
+            "top_p": top_p,
+            "max_input_tokens": max_input_tokens,
+        }
+        return StreamingChat(self.API_URL, self._headers, json_data)
