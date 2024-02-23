@@ -5,10 +5,10 @@ File: client.py
 Author: Dartrisen
 Description: unofficial client for the Groq API.
 """
-
 import json
+from http.client import IncompleteRead
 from time import time
-from typing import List
+from typing import List, Iterator
 
 import requests
 
@@ -17,7 +17,9 @@ from .utils import get_random_user_agent, get_anon_token, create_headers
 
 
 class StreamingChat:
-    def __init__(self, url, headers, json_data):
+    """Live-streaming chat class."""
+
+    def __init__(self, url: str, headers: dict, json_data: dict) -> None:
         self._url = url
         self._headers = headers
         self._json_data = json_data
@@ -32,13 +34,13 @@ class StreamingChat:
         if not self._response or self._response.status_code != 200:
             raise Exception(f"Request failed with status code {self._response.status_code}")
 
-        def iterator():
+        def iterator() -> Iterator[str]:
             try:
                 for chunk in self._response.iter_lines(decode_unicode=True):
                     if chunk:
                         loaded = json.loads(chunk)
                         yield loaded.get("result", {}).get("content", "")
-            except Exception as e:
+            except (TypeError, IncompleteRead) as e:
                 print(f"Error while decoding JSON: {e}")
                 raise
 
@@ -78,19 +80,6 @@ class Client:
             top_p: float = 0.8,
             max_input_tokens: int = 21845
     ) -> Chat:
-        """.
-        :param user_prompt:
-        :param model_id:
-        :param system_prompt:
-        :param history:
-        :param seed:
-        :param max_tokens:
-        :param temperature:
-        :param top_k:
-        :param top_p:
-        :param max_input_tokens:
-        :return:
-        """
         if model_id == "llama2-70b-4096":
             max_tokens = min(4096, max_tokens)
             max_input_tokens = min(2730, max_input_tokens)
@@ -142,8 +131,9 @@ class Client:
                         )
 
                     res += loaded["result"].get("content", "")
-                except Exception as e:
-                    pass
+                except json.JSONDecodeError as e:
+                    print(f"Error while decoding JSON: {e}")
+                    continue
 
         return Chat(
             content=res,
@@ -156,7 +146,7 @@ class Client:
             user_prompt: str,
             model_id: str = "mixtral-8x7b-32768",
             system_prompt: str = "Please try to provide useful, helpful and actionable answers.",
-            history: List[str] = [],
+            history: List[str] = None,
             seed: int = 10,
             max_tokens: int = 32768,
             temperature: float = 0.2,
@@ -167,7 +157,8 @@ class Client:
         if model_id == "llama2-70b-4096":
             max_tokens = min(4096, max_tokens)
             max_input_tokens = min(2730, max_input_tokens)
-
+        if history is None:
+            history = []
         json_data = {
             "model_id": model_id,
             "system_prompt": system_prompt,

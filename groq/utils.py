@@ -1,5 +1,14 @@
+# -*- coding: utf-8 -*-
+
+"""
+File: utils.py
+Author: Dartrisen
+Description: some utils for the Groq API.
+"""
 import random
+
 import requests
+
 from .constants import USER_AGENTS
 
 

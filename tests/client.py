@@ -5,9 +5,9 @@ File: client.py
 Author: Dartrisen
 Description: tests.
 """
-
 import unittest
 from unittest.mock import patch
+
 from groq.client import Client
 
 
@@ -17,7 +17,15 @@ class TestClient(unittest.TestCase):
         # Mocking requests.post to avoid actual HTTP requests
         with patch('requests.post') as mock_post:
             mock_post.return_value.iter_lines.return_value = [
-                '{"result": {"content": "Test response", "requestId": "123456", "stats": {"timeGenerated": 10, "tokensGenerated": 20, "timeProcessed": 5, "tokensProcessed": 15}}}'
+                '{"result": {'
+                '"content": "Test response", '
+                '"requestId": "123456", '
+                '"stats": {'
+                '"timeGenerated": 10, '
+                '"tokensGenerated": 20, '
+                '"timeProcessed": 5, '
+                '"tokensProcessed": 15'
+                '}}}'
             ]
             client = Client()
             chat = client.create_chat("Test prompt")
@@ -31,8 +39,17 @@ class TestClient(unittest.TestCase):
     def test_create_chat_with_history(self):
         with patch('requests.post') as mock_post:
             mock_post.return_value.iter_lines.return_value = [
-                '{"result": {"content": "Test response with history", "requestId": "789012", "stats": {"timeGenerated": 20, "tokensGenerated": 30, "timeProcessed": 10, "tokensProcessed": 25}}}'
+                '{"result": {'
+                '"content": "Test response with history", '
+                '"requestId": "789012", '
+                '"stats": {'
+                '"timeGenerated": 20, '
+                '"tokensGenerated": 30, '
+                '"timeProcessed": 10, '
+                '"tokensProcessed": 25'
+                '}}}'
             ]
+
             client = Client()
             chat = client.create_chat("Test prompt with history", history=["previous message"])
             self.assertEqual(chat.content, "Test response with history")

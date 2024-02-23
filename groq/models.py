@@ -1,5 +1,13 @@
-from pydantic import BaseModel
+# -*- coding: utf-8 -*-
+
+"""
+File: models.py
+Author: Dartrisen
+Description: models for the Groq API.
+"""
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class Stats(BaseModel):
